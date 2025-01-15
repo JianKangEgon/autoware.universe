@@ -17,7 +17,7 @@
  * @brief HDD information read class
  */
 
-#include <hdd_reader/hdd_reader.hpp>
+#include "system_monitor/hdd_reader/hdd_reader.hpp"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/text_iarchive.hpp>
@@ -43,6 +43,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <regex>
 #include <string>
 #include <utility>
@@ -59,25 +60,34 @@ constexpr int PORT = 7635;
  */
 struct AtaPassThrough12
 {
-  uint8_t operation_code_;      //!< @brief OPERATION CODE (A1h)
-  uint8_t reserved0_ : 1;       //!< @brief Reserved
-  uint8_t protocol_ : 4;        //!< @brief PROTOCOL
+  uint8_t operation_code_;  //!< @brief OPERATION CODE (A1h)
+  // cppcheck-suppress unusedStructMember
+  uint8_t reserved0_ : 1;  //!< @brief Reserved
+  uint8_t protocol_ : 4;   //!< @brief PROTOCOL
+  // cppcheck-suppress unusedStructMember
   uint8_t multiple_count_ : 3;  //!< @brief MULTIPLE_COUNT
   uint8_t t_length_ : 2;        //!< @brief T_LENGTH
   uint8_t byt_blok_ : 1;        //!< @brief BYT_BLOK
   uint8_t t_dir_ : 1;           //!< @brief T_DIR
-  uint8_t reserved1_ : 1;       //!< @brief Reserved
-  uint8_t ck_cond_ : 1;         //!< @brief CK_COND
-  uint8_t off_line_ : 2;        //!< @brief OFF_LINE
-  uint8_t features_;            //!< @brief FEATURES (0:7)
-  uint8_t sector_count_;        //!< @brief SECTOR_COUNT (0:7)
-  uint8_t lba_low_;             //!< @brief LBA_LOW (0:7)
-  uint8_t lba_mid_;             //!< @brief LBA_MID (0:7)
-  uint8_t lbe_high_;            //!< @brief LBE_HIGH (0:7)
-  uint8_t device_;              //!< @brief DEVICE
-  uint8_t command_;             //!< @brief COMMAND
-  uint8_t reserved2_;           //!< @brief Reserved
-  uint8_t control_;             //!< @brief CONTROL
+  // cppcheck-suppress unusedStructMember
+  uint8_t reserved1_ : 1;  //!< @brief Reserved
+  // cppcheck-suppress unusedStructMember
+  uint8_t ck_cond_ : 1;  //!< @brief CK_COND
+  // cppcheck-suppress unusedStructMember
+  uint8_t off_line_ : 2;  //!< @brief OFF_LINE
+  uint8_t features_;      //!< @brief FEATURES (0:7)
+  uint8_t sector_count_;  //!< @brief SECTOR_COUNT (0:7)
+  // cppcheck-suppress unusedStructMember
+  uint8_t lba_low_;   //!< @brief LBA_LOW (0:7)
+  uint8_t lba_mid_;   //!< @brief LBA_MID (0:7)
+  uint8_t lbe_high_;  //!< @brief LBE_HIGH (0:7)
+  // cppcheck-suppress unusedStructMember
+  uint8_t device_;   //!< @brief DEVICE
+  uint8_t command_;  //!< @brief COMMAND
+  // cppcheck-suppress unusedStructMember
+  uint8_t reserved2_;  //!< @brief Reserved
+  // cppcheck-suppress unusedStructMember
+  uint8_t control_;  //!< @brief CONTROL
 };
 
 /**
@@ -198,7 +208,8 @@ int get_ata_identify(int fd, HddInfo * info)
   // Create a control structure
   hdr.interface_id = 'S';                   // This must be set to 'S'
   hdr.dxfer_direction = SG_DXFER_FROM_DEV;  // a SCSI READ command
-  hdr.cmd_len = sizeof(ata);         // length in bytes of the SCSI command that 'cmdp' points to
+  hdr.cmd_len = sizeof(ata);  // length in bytes of the SCSI command that 'cmdp' points to
+  // cppcheck-suppress cstyleCast
   hdr.cmdp = (unsigned char *)&ata;  // SCSI command to be executed
   hdr.dxfer_len = sizeof(data);      // number of bytes to be moved in the data transfer
   hdr.dxferp = data;                 // a pointer to user memory
@@ -260,7 +271,8 @@ int get_ata_smart_data(int fd, HddInfo * info, const HddDevice & device)
   // Create a control structure
   hdr.interface_id = 'S';                   // This must be set to 'S'
   hdr.dxfer_direction = SG_DXFER_FROM_DEV;  // a SCSI READ command
-  hdr.cmd_len = sizeof(ata);         // length in bytes of the SCSI command that 'cmdp' points to
+  hdr.cmd_len = sizeof(ata);  // length in bytes of the SCSI command that 'cmdp' points to
+  // cppcheck-suppress cstyleCast
   hdr.cmdp = (unsigned char *)&ata;  // SCSI command to be executed
   hdr.dxfer_len = sizeof(data);      // number of bytes to be moved in the data transfer
   hdr.dxferp = &data;                // a pointer to user memory
@@ -319,10 +331,10 @@ int get_nvme_identify(int fd, HddInfo * info)
   char data[4096]{};  // Fixed size for Identify command
 
   // The Identify command returns a data buffer that describes information about the NVM subsystem
-  cmd.opcode = 0x06;            // Identify
-  cmd.addr = (uint64_t)data;    // memory address of data
-  cmd.data_len = sizeof(data);  // length of data
-  cmd.cdw10 = 0x01;             // Identify Controller data structure
+  cmd.opcode = 0x06;                            // Identify
+  cmd.addr = reinterpret_cast<uint64_t>(data);  // memory address of data
+  cmd.data_len = sizeof(data);                  // length of data
+  cmd.cdw10 = 0x01;                             // Identify Controller data structure
 
   // send Admin Command to device
   int ret = ioctl(fd, NVME_IOCTL_ADMIN_CMD, &cmd);
@@ -357,13 +369,13 @@ int get_nvme_smart_data(int fd, HddInfo * info)
   unsigned char data[144]{};  // 36 Dword (get byte 0 to 143)
 
   // The Get Log Page command returns a data buffer containing the log page requested
-  cmd.opcode = 0x02;            // Get Log Page
-  cmd.nsid = 0xFFFFFFFF;        // Global log page
-  cmd.addr = (uint64_t)data;    // memory address of data
-  cmd.data_len = sizeof(data);  // length of data
-  cmd.cdw10 = 0x00240002;       // Bit 27:16 Number of Dwords (NUMD) = 024h (36 Dword)
-                                // - Minimum necessary size to obtain S.M.A.R.T. informations
-                                // Bit 07:00 = 02h (SMART / Health Information)
+  cmd.opcode = 0x02;                            // Get Log Page
+  cmd.nsid = 0xFFFFFFFF;                        // Global log page
+  cmd.addr = reinterpret_cast<uint64_t>(data);  // memory address of data
+  cmd.data_len = sizeof(data);                  // length of data
+  cmd.cdw10 = 0x00240002;  // Bit 27:16 Number of Dwords (NUMD) = 024h (36 Dword)
+                           // - Minimum necessary size to obtain S.M.A.R.T. informations
+                           // Bit 07:00 = 02h (SMART / Health Information)
 
   // send Admin Command to device
   int ret = ioctl(fd, NVME_IOCTL_ADMIN_CMD, &cmd);
@@ -545,6 +557,7 @@ void run(int port)
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port);
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  // cppcheck-suppress cstyleCast
   ret = bind(sock, (struct sockaddr *)&addr, sizeof(addr));
   if (ret < 0) {
     syslog(LOG_ERR, "Failed to give the socket FD the local address ADDR. %s\n", strerror(errno));
@@ -643,48 +656,56 @@ void run(int port)
 
 int main(int argc, char ** argv)
 {
-  static struct option long_options[] = {
-    {"help", no_argument, nullptr, 'h'},
-    {"port", required_argument, nullptr, 'p'},
-    {nullptr, 0, nullptr, 0}};
+  try {
+    static struct option long_options[] = {
+      {"help", no_argument, nullptr, 'h'},
+      {"port", required_argument, nullptr, 'p'},
+      {nullptr, 0, nullptr, 0}};
 
-  // Parse command-line options
-  int c = 0;
-  int option_index = 0;
-  int port = PORT;
-  while ((c = getopt_long(argc, argv, "hp:", long_options, &option_index)) != -1) {
-    switch (c) {
-      case 'h':
-        usage();
-        return EXIT_SUCCESS;
+    // Parse command-line options
+    int c = 0;
+    int option_index = 0;
+    int port = PORT;
+    while ((c = getopt_long(argc, argv, "hp:", long_options, &option_index)) != -1) {
+      switch (c) {
+        case 'h':
+          usage();
+          return EXIT_SUCCESS;
 
-      case 'p':
-        try {
-          port = boost::lexical_cast<int>(optarg);
-        } catch (const boost::bad_lexical_cast & e) {
-          printf("Error: %s\n", e.what());
-          return EXIT_FAILURE;
-        }
-        break;
+        case 'p':
+          try {
+            port = boost::lexical_cast<int>(optarg);
+          } catch (const boost::bad_lexical_cast & e) {
+            printf("Error: %s\n", e.what());
+            return EXIT_FAILURE;
+          }
+          break;
 
-      default:
-        break;
+        default:
+          break;
+      }
     }
+
+    // Put the program in the background
+    if (daemon(0, 0) < 0) {
+      printf("Failed to put the program in the background. %s\n", strerror(errno));
+      return errno;
+    }
+
+    // Open connection to system logger
+    openlog(nullptr, LOG_PID, LOG_DAEMON);
+
+    run(port);
+
+    // Close descriptor used to write to system logger
+    closelog();
+  } catch (const std::exception & e) {
+    std::cerr << "Exception in main(): " << e.what() << std::endl;
+    return EXIT_FAILURE;
+  } catch (...) {
+    std::cerr << "Unknown exception in main()" << std::endl;
+    return EXIT_FAILURE;
   }
-
-  // Put the program in the background
-  if (daemon(0, 0) < 0) {
-    printf("Failed to put the program in the background. %s\n", strerror(errno));
-    return errno;
-  }
-
-  // Open connection to system logger
-  openlog(nullptr, LOG_PID, LOG_DAEMON);
-
-  run(port);
-
-  // Close descriptor used to write to system logger
-  closelog();
 
   return EXIT_SUCCESS;
 }

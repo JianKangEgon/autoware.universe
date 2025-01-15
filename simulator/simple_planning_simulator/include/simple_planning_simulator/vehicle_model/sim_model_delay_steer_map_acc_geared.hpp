@@ -15,13 +15,11 @@
 #ifndef SIMPLE_PLANNING_SIMULATOR__VEHICLE_MODEL__SIM_MODEL_DELAY_STEER_MAP_ACC_GEARED_HPP_
 #define SIMPLE_PLANNING_SIMULATOR__VEHICLE_MODEL__SIM_MODEL_DELAY_STEER_MAP_ACC_GEARED_HPP_
 
+#include "autoware/interpolation/linear_interpolation.hpp"
 #include "eigen3/Eigen/Core"
 #include "eigen3/Eigen/LU"
-#include "interpolation/linear_interpolation.hpp"
 #include "simple_planning_simulator/utils/csv_loader.hpp"
 #include "simple_planning_simulator/vehicle_model/sim_model_interface.hpp"
-
-#include <common/types.hpp>
 
 #include <deque>
 #include <iostream>
@@ -43,8 +41,8 @@ public:
     }
 
     vehicle_name_ = table[0][0];
-    vel_index_ = CSVLoader::getRowIndex(table);
-    acc_index_ = CSVLoader::getColumnIndex(table);
+    vel_index_ = CSVLoader::getColumnIndex(table);
+    acc_index_ = CSVLoader::getRowIndex(table);
     acceleration_map_ = CSVLoader::getMap(table);
 
     std::cout << "[SimModelDelaySteerMapAccGeared]: success to read acceleration map from "
@@ -55,17 +53,18 @@ public:
   double getAcceleration(const double acc_des, const double vel) const
   {
     std::vector<double> interpolated_acc_vec;
-    const double clamped_vel = CSVLoader::clampValue(vel, vel_index_, "acc: vel");
+    const double clamped_vel = CSVLoader::clampValue(vel, vel_index_);
 
     // (throttle, vel, acc) map => (throttle, acc) map by fixing vel
     for (const auto & acc_vec : acceleration_map_) {
-      interpolated_acc_vec.push_back(interpolation::lerp(vel_index_, acc_vec, clamped_vel));
+      interpolated_acc_vec.push_back(
+        autoware::interpolation::lerp(vel_index_, acc_vec, clamped_vel));
     }
     // calculate throttle
     // When the desired acceleration is smaller than the throttle area, return min acc
     // When the desired acceleration is greater than the throttle area, return max acc
-    const double clamped_acc = CSVLoader::clampValue(acc_des, acc_index_, "acceleration: acc");
-    const double acc = interpolation::lerp(acc_index_, interpolated_acc_vec, clamped_acc);
+    const double clamped_acc = CSVLoader::clampValue(acc_des, acc_index_);
+    const double acc = autoware::interpolation::lerp(acc_index_, interpolated_acc_vec, clamped_acc);
 
     return acc;
   }
@@ -92,12 +91,13 @@ public:
    * @param [in] acc_time_constant time constant for 1D model of accel dynamics
    * @param [in] steer_delay time delay for steering command [s]
    * @param [in] steer_time_constant time constant for 1D model of steering dynamics
+   * @param [in] steer_bias steering bias [rad]
    * @param [in] path path to csv file for acceleration conversion map
    */
   SimModelDelaySteerMapAccGeared(
     double vx_lim, double steer_lim, double vx_rate_lim, double steer_rate_lim, double wheelbase,
     double dt, double acc_delay, double acc_time_constant, double steer_delay,
-    double steer_time_constant, std::string path);
+    double steer_time_constant, double steer_bias, std::string path);
 
   /**
    * @brief default destructor
@@ -135,6 +135,7 @@ private:
   const double acc_time_constant_;        //!< @brief time constant for accel dynamics
   const double steer_delay_;              //!< @brief time delay for steering command [s]
   const double steer_time_constant_;      //!< @brief time constant for steering dynamics
+  const double steer_bias_;               //!< @brief steering angle bias [rad]
   const std::string path_;                //!< @brief conversion map path
 
   /**
@@ -200,7 +201,7 @@ private:
    * @brief update state considering current gear
    * @param [in] state current state
    * @param [in] prev_state previous state
-   * @param [in] gear current gear (defined in autoware_auto_msgs/GearCommand)
+   * @param [in] gear current gear (defined in autoware_msgs/GearCommand)
    * @param [in] dt delta time to update state
    */
   void updateStateWithGear(

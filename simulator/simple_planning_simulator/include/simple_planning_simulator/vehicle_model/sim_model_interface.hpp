@@ -17,7 +17,10 @@
 
 #include <Eigen/Core>
 
-#include "autoware_auto_vehicle_msgs/msg/gear_command.hpp"
+#include "autoware_vehicle_msgs/msg/gear_command.hpp"
+#include "tier4_vehicle_msgs/msg/actuation_status_stamped.hpp"
+
+#include <optional>
 
 /**
  * @class SimModelInterface
@@ -26,13 +29,15 @@
 class SimModelInterface
 {
 protected:
+  using ActuationStatusStamped = tier4_vehicle_msgs::msg::ActuationStatusStamped;
+
   const int dim_x_;        //!< @brief dimension of state x
   const int dim_u_;        //!< @brief dimension of input u
   Eigen::VectorXd state_;  //!< @brief vehicle state vector
   Eigen::VectorXd input_;  //!< @brief vehicle input vector
 
-  //!< @brief gear command defined in autoware_auto_msgs/GearCommand
-  uint8_t gear_ = autoware_auto_vehicle_msgs::msg::GearCommand::DRIVE;
+  //!< @brief gear command defined in autoware_vehicle_msgs/GearCommand
+  uint8_t gear_ = autoware_vehicle_msgs::msg::GearCommand::DRIVE;
 
 public:
   /**
@@ -45,7 +50,7 @@ public:
   /**
    * @brief destructor
    */
-  ~SimModelInterface() = default;
+  virtual ~SimModelInterface() = default;
 
   /**
    * @brief get state vector of model
@@ -60,12 +65,6 @@ public:
   void getInput(Eigen::VectorXd & input);
 
   /**
-   * @brief set state vector of model
-   * @param [in] state state vector
-   */
-  void setState(const Eigen::VectorXd & state);
-
-  /**
    * @brief set input vector of model
    * @param [in] input input vector
    */
@@ -73,7 +72,7 @@ public:
 
   /**
    * @brief set gear
-   * @param [in] gear gear command defined in autoware_auto_msgs/GearCommand
+   * @param [in] gear gear command defined in autoware_vehicle_msgs/GearCommand
    */
   void setGear(const uint8_t gear);
 
@@ -90,6 +89,14 @@ public:
    * @param [in] input vehicle input
    */
   void updateEuler(const double & dt, const Eigen::VectorXd & input);
+
+  /**
+   * @brief set state vector of model
+   * @details In some sim models, the state member should be updated as well. Therefore, this
+   * function is defined as virtual.
+   * @param [in] state state vector
+   */
+  virtual void setState(const Eigen::VectorXd & state);
 
   /**
    * @brief update vehicle states
@@ -151,6 +158,16 @@ public:
    * @brief get input vector dimension
    */
   inline int getDimU() { return dim_u_; }
+
+  /**
+   * @brief is publish actuation status enabled
+   */
+  virtual bool shouldPublishActuationStatus() const { return false; }
+
+  /*
+   * @brief get actuation status
+   */
+  virtual std::optional<ActuationStatusStamped> getActuationStatus() const { return std::nullopt; }
 
   /**
    * @brief calculate derivative of states with vehicle model

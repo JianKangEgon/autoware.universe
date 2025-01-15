@@ -14,12 +14,14 @@
 
 #include "dummy_perception_publisher/node.hpp"
 
-#include "tier4_autoware_utils/geometry/geometry.hpp"
+#include "autoware/universe_utils/geometry/geometry.hpp"
 
 #include <pcl/filters/voxel_grid_occlusion_estimation.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2/LinearMath/Vector3.h>
+
+#include <algorithm>
 #ifdef ROS_DISTRO_GALACTIC
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #else
@@ -33,11 +35,11 @@
 #include <utility>
 #include <vector>
 
-using autoware_auto_perception_msgs::msg::TrackedObject;
-using autoware_auto_perception_msgs::msg::TrackedObjects;
+using autoware_perception_msgs::msg::TrackedObject;
+using autoware_perception_msgs::msg::TrackedObjects;
 
 ObjectInfo::ObjectInfo(
-  const dummy_perception_publisher::msg::Object & object, const rclcpp::Time & current_time)
+  const tier4_simulation_msgs::msg::DummyObject & object, const rclcpp::Time & current_time)
 : length(object.shape.dimensions.x),
   width(object.shape.dimensions.y),
   height(object.shape.dimensions.z),
@@ -93,7 +95,7 @@ ObjectInfo::ObjectInfo(
   }
 
   const auto current_pose =
-    tier4_autoware_utils::calcOffsetPose(initial_pose, move_distance, 0.0, 0.0);
+    autoware::universe_utils::calcOffsetPose(initial_pose, move_distance, 0.0, 0.0);
 
   // calculate tf from map to moved_object
   geometry_msgs::msg::Transform ros_map2moved_object;
@@ -108,7 +110,7 @@ ObjectInfo::ObjectInfo(
 }
 
 TrackedObject ObjectInfo::toTrackedObject(
-  const dummy_perception_publisher::msg::Object & object) const
+  const tier4_simulation_msgs::msg::DummyObject & object) const
 {
   TrackedObject tracked_object;
   tracked_object.kinematics.pose_with_covariance = pose_covariance_;
@@ -119,6 +121,8 @@ TrackedObject ObjectInfo::toTrackedObject(
   tracked_object.shape.dimensions.y = width;
   tracked_object.shape.dimensions.z = height;
   tracked_object.object_id = object.id;
+  tracked_object.kinematics.orientation_availability =
+    autoware_perception_msgs::msg::TrackedObjectKinematics::SIGN_UNKNOWN;
   return tracked_object;
 }
 
@@ -162,14 +166,14 @@ DummyPerceptionPublisherNode::DummyPerceptionPublisherNode()
     this->create_publisher<tier4_perception_msgs::msg::DetectedObjectsWithFeature>(
       "output/dynamic_object", qos);
   pointcloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("output/points_raw", qos);
-  object_sub_ = this->create_subscription<dummy_perception_publisher::msg::Object>(
+  object_sub_ = this->create_subscription<tier4_simulation_msgs::msg::DummyObject>(
     "input/object", 100,
     std::bind(&DummyPerceptionPublisherNode::objectCallback, this, std::placeholders::_1));
 
   // optional ground truth publisher
   if (publish_ground_truth_objects_) {
     ground_truth_objects_pub_ =
-      this->create_publisher<autoware_auto_perception_msgs::msg::TrackedObjects>(
+      this->create_publisher<autoware_perception_msgs::msg::TrackedObjects>(
         "~/output/debug/ground_truth_objects", qos);
   }
 
@@ -182,7 +186,7 @@ void DummyPerceptionPublisherNode::timerCallback()
 {
   // output msgs
   tier4_perception_msgs::msg::DetectedObjectsWithFeature output_dynamic_object_msg;
-  autoware_auto_perception_msgs::msg::TrackedObjects output_ground_truth_objects_msg;
+  autoware_perception_msgs::msg::TrackedObjects output_ground_truth_objects_msg;
   geometry_msgs::msg::PoseStamped output_moved_object_pose;
   sensor_msgs::msg::PointCloud2 output_pointcloud_msg;
   std_msgs::msg::Header header;
@@ -197,7 +201,7 @@ void DummyPerceptionPublisherNode::timerCallback()
   std::string error;
   if (!tf_buffer_.canTransform("base_link", /*src*/ "map", tf2::TimePointZero, &error)) {
     failed_tf_time = this->now();
-    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "map->base_link is not available yet");
+    RCLCPP_DEBUG_THROTTLE(get_logger(), *get_clock(), 5000, "map->base_link is not available yet");
     return;
   }
 
@@ -282,7 +286,7 @@ void DummyPerceptionPublisherNode::timerCallback()
       feature_object.object.kinematics.twist_with_covariance =
         object.initial_state.twist_covariance;
       feature_object.object.kinematics.orientation_availability =
-        autoware_auto_perception_msgs::msg::DetectedObjectKinematics::UNAVAILABLE;
+        autoware_perception_msgs::msg::DetectedObjectKinematics::SIGN_UNKNOWN;
       feature_object.object.kinematics.has_twist = false;
       tf2::toMsg(
         tf_base_link2noised_moved_object,
@@ -329,10 +333,10 @@ void DummyPerceptionPublisherNode::timerCallback()
 }
 
 void DummyPerceptionPublisherNode::objectCallback(
-  const dummy_perception_publisher::msg::Object::ConstSharedPtr msg)
+  const tier4_simulation_msgs::msg::DummyObject::ConstSharedPtr msg)
 {
   switch (msg->action) {
-    case dummy_perception_publisher::msg::Object::ADD: {
+    case tier4_simulation_msgs::msg::DummyObject::ADD: {
       tf2::Transform tf_input2map;
       tf2::Transform tf_input2object_origin;
       tf2::Transform tf_map2object_origin;
@@ -348,7 +352,7 @@ void DummyPerceptionPublisherNode::objectCallback(
       }
       tf2::fromMsg(msg->initial_state.pose_covariance.pose, tf_input2object_origin);
       tf_map2object_origin = tf_input2map.inverse() * tf_input2object_origin;
-      dummy_perception_publisher::msg::Object object;
+      tier4_simulation_msgs::msg::DummyObject object;
       object = *msg;
       tf2::toMsg(tf_map2object_origin, object.initial_state.pose_covariance.pose);
 
@@ -369,7 +373,7 @@ void DummyPerceptionPublisherNode::objectCallback(
       objects_.push_back(object);
       break;
     }
-    case dummy_perception_publisher::msg::Object::DELETE: {
+    case tier4_simulation_msgs::msg::DummyObject::DELETE: {
       for (size_t i = 0; i < objects_.size(); ++i) {
         if (objects_.at(i).id.uuid == msg->id.uuid) {
           objects_.erase(objects_.begin() + i);
@@ -378,7 +382,7 @@ void DummyPerceptionPublisherNode::objectCallback(
       }
       break;
     }
-    case dummy_perception_publisher::msg::Object::MODIFY: {
+    case tier4_simulation_msgs::msg::DummyObject::MODIFY: {
       for (size_t i = 0; i < objects_.size(); ++i) {
         if (objects_.at(i).id.uuid == msg->id.uuid) {
           tf2::Transform tf_input2map;
@@ -396,7 +400,7 @@ void DummyPerceptionPublisherNode::objectCallback(
           }
           tf2::fromMsg(msg->initial_state.pose_covariance.pose, tf_input2object_origin);
           tf_map2object_origin = tf_input2map.inverse() * tf_input2object_origin;
-          dummy_perception_publisher::msg::Object object;
+          tier4_simulation_msgs::msg::DummyObject object;
           objects_.at(i) = *msg;
           tf2::toMsg(tf_map2object_origin, objects_.at(i).initial_state.pose_covariance.pose);
           if (use_base_link_z_) {
@@ -418,7 +422,7 @@ void DummyPerceptionPublisherNode::objectCallback(
       }
       break;
     }
-    case dummy_perception_publisher::msg::Object::DELETEALL: {
+    case tier4_simulation_msgs::msg::DummyObject::DELETEALL: {
       objects_.clear();
       break;
     }

@@ -17,7 +17,7 @@
  * @brief MSR read class
  */
 
-#include <msr_reader/msr_reader.hpp>
+#include "system_monitor/msr_reader/msr_reader.hpp"
 
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/filesystem.hpp>
@@ -35,6 +35,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <iostream>
 #include <regex>
 #include <sstream>
@@ -54,22 +55,36 @@ constexpr int PORT = 7634;
  */
 typedef struct
 {
-  uint64_t pkg_thermal_status_ : 1;               //!< @brief 0 Pkg Thermal Status (RO)
-  uint64_t pkg_thermal_status_log_ : 1;           //!< @brief 1 Pkg Thermal Status Log (R/W)
-  uint64_t pkg_prochot_event_ : 1;                //!< @brief 2 Pkg PROCHOT # event (RO)
-  uint64_t pkg_prochot_log_ : 1;                  //!< @brief 3 Pkg PROCHOT # log (R/WC0)
+  uint64_t pkg_thermal_status_ : 1;  //!< @brief 0 Pkg Thermal Status (RO)
+  // cppcheck-suppress unusedStructMember
+  uint64_t pkg_thermal_status_log_ : 1;  //!< @brief 1 Pkg Thermal Status Log (R/W)
+  // cppcheck-suppress unusedStructMember
+  uint64_t pkg_prochot_event_ : 1;  //!< @brief 2 Pkg PROCHOT # event (RO)
+  // cppcheck-suppress unusedStructMember
+  uint64_t pkg_prochot_log_ : 1;  //!< @brief 3 Pkg PROCHOT # log (R/WC0)
+  // cppcheck-suppress unusedStructMember
   uint64_t pkg_critical_temperature_status_ : 1;  //!< @brief 4 Pkg Critical Temperature Status (RO)
   uint64_t                                        //!< @brief 5 Pkg Critical Temperature
+                                                  // cppcheck-suppress unusedStructMember
     pkg_critical_temperature_status_log_ : 1;     //!<   Status Log (R/WC0)
-  uint64_t pkg_thermal_threshold_1_status_ : 1;   //!< @brief 6 Pkg Thermal Threshold #1 Status (RO)
-  uint64_t pkg_thermal_threshold_1_log_ : 1;      //!< @brief 7 Pkg Thermal Threshold #1 log (R/WC0)
-  uint64_t pkg_thermal_threshold_2_status_ : 1;   //!< @brief 8 Pkg Thermal Threshold #2 Status (RO)
-  uint64_t pkg_thermal_threshold_2_log_ : 1;      //!< @brief 9 Pkg Thermal Threshold #2 log (R/WC0)
-  uint64_t pkg_power_limitation_status_ : 1;      //!< @brief 10 Pkg Power Limitation Status (RO)
-  uint64_t pkg_power_limitation_log_ : 1;         //!< @brief 11 Pkg Power Limitation log (R/WC0)
-  uint64_t reserved1_ : 4;                        //!< @brief 15:12 Reserved
-  uint64_t pkg_digital_readout_ : 7;              //!< @brief 22:16 Pkg Digital Readout (RO)
-  uint64_t reserved2_ : 41;                       //!< @brief 63:23 Reserved
+  // cppcheck-suppress unusedStructMember
+  uint64_t pkg_thermal_threshold_1_status_ : 1;  //!< @brief 6 Pkg Thermal Threshold #1 Status (RO)
+  // cppcheck-suppress unusedStructMember
+  uint64_t pkg_thermal_threshold_1_log_ : 1;  //!< @brief 7 Pkg Thermal Threshold #1 log (R/WC0)
+  // cppcheck-suppress unusedStructMember
+  uint64_t pkg_thermal_threshold_2_status_ : 1;  //!< @brief 8 Pkg Thermal Threshold #2 Status (RO)
+  // cppcheck-suppress unusedStructMember
+  uint64_t pkg_thermal_threshold_2_log_ : 1;  //!< @brief 9 Pkg Thermal Threshold #2 log (R/WC0)
+  // cppcheck-suppress unusedStructMember
+  uint64_t pkg_power_limitation_status_ : 1;  //!< @brief 10 Pkg Power Limitation Status (RO)
+  // cppcheck-suppress unusedStructMember
+  uint64_t pkg_power_limitation_log_ : 1;  //!< @brief 11 Pkg Power Limitation log (R/WC0)
+  // cppcheck-suppress unusedStructMember
+  uint64_t reserved1_ : 4;  //!< @brief 15:12 Reserved
+  // cppcheck-suppress unusedStructMember
+  uint64_t pkg_digital_readout_ : 7;  //!< @brief 22:16 Pkg Digital Readout (RO)
+  // cppcheck-suppress unusedStructMember
+  uint64_t reserved2_ : 41;  //!< @brief 63:23 Reserved
 } PackageThermalStatus;
 
 /**
@@ -114,6 +129,7 @@ void run(int port, const std::vector<std::string> & list)
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port);
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  // cppcheck-suppress cstyleCast
   ret = bind(sock, (struct sockaddr *)&addr, sizeof(addr));
   if (ret < 0) {
     syslog(LOG_ERR, "Failed to give the socket FD the local address ADDR. %s\n", strerror(errno));
@@ -196,90 +212,98 @@ void run(int port, const std::vector<std::string> & list)
 
 int main(int argc, char ** argv)
 {
-  static struct option long_options[] = {
-    {"help", no_argument, 0, 'h'}, {"port", required_argument, 0, 'p'}, {0, 0, 0, 0}};
+  try {
+    static struct option long_options[] = {
+      {"help", no_argument, 0, 'h'}, {"port", required_argument, 0, 'p'}, {0, 0, 0, 0}};
 
-  // Parse command-line options
-  int c = 0;
-  int option_index = 0;
-  int port = PORT;
-  while ((c = getopt_long(argc, argv, "hp:", long_options, &option_index)) != -1) {
-    switch (c) {
-      case 'h':
-        usage();
-        return EXIT_SUCCESS;
+    // Parse command-line options
+    int c = 0;
+    int option_index = 0;
+    int port = PORT;
+    while ((c = getopt_long(argc, argv, "hp:", long_options, &option_index)) != -1) {
+      switch (c) {
+        case 'h':
+          usage();
+          return EXIT_SUCCESS;
 
-      case 'p':
-        try {
-          port = boost::lexical_cast<int>(optarg);
-        } catch (const boost::bad_lexical_cast & e) {
-          printf("Error: %s\n", e.what());
-          return EXIT_FAILURE;
-        }
-        break;
+        case 'p':
+          try {
+            port = boost::lexical_cast<int>(optarg);
+          } catch (const boost::bad_lexical_cast & e) {
+            printf("Error: %s\n", e.what());
+            return EXIT_FAILURE;
+          }
+          break;
 
-      default:
-        break;
+        default:
+          break;
+      }
     }
-  }
 
-  if (!fs::exists("/dev/cpu")) {
-    printf("Failed to access /dev/cpu.\n");
+    if (!fs::exists("/dev/cpu")) {
+      printf("Failed to access /dev/cpu.\n");
+      return EXIT_FAILURE;
+    }
+
+    std::vector<std::string> list;
+    const fs::path root("/dev/cpu");
+
+    for (const fs::path & path : boost::make_iterator_range(
+           fs::recursive_directory_iterator(root), fs::recursive_directory_iterator())) {
+      if (fs::is_directory(path)) {
+        continue;
+      }
+
+      std::cmatch match;
+      const char * msr = path.generic_string().c_str();
+
+      // /dev/cpu/[0-9]/msr ?
+      if (!std::regex_match(msr, match, std::regex(".*msr"))) {
+        continue;
+      }
+
+      list.push_back(path.generic_string());
+    }
+
+    std::sort(list.begin(), list.end(), [](const std::string & c1, const std::string & c2) {
+      std::cmatch match;
+      const std::regex filter(".*/(\\d+)/msr");
+      int n1 = 0;
+      int n2 = 0;
+      if (std::regex_match(c1.c_str(), match, filter)) {
+        n1 = std::stoi(match[1].str());
+      }
+      if (std::regex_match(c2.c_str(), match, filter)) {
+        n2 = std::stoi(match[1].str());
+      }
+      return n1 < n2;
+    });  // NOLINT
+
+    if (list.empty()) {
+      printf("No msr found in /dev/cpu.\n");
+      return EXIT_FAILURE;
+    }
+
+    // Put the program in the background
+    if (daemon(0, 0) < 0) {
+      printf("Failed to put the program in the background. %s\n", strerror(errno));
+      return errno;
+    }
+
+    // Open connection to system logger
+    openlog(nullptr, LOG_PID, LOG_DAEMON);
+
+    run(port, list);
+
+    // Close descriptor used to write to system logger
+    closelog();
+  } catch (const std::exception & e) {
+    std::cerr << "Exception in main(): " << e.what() << std::endl;
+    return EXIT_FAILURE;
+  } catch (...) {
+    std::cerr << "Unknown exception in main()" << std::endl;
     return EXIT_FAILURE;
   }
-
-  std::vector<std::string> list;
-  const fs::path root("/dev/cpu");
-
-  for (const fs::path & path : boost::make_iterator_range(
-         fs::recursive_directory_iterator(root), fs::recursive_directory_iterator())) {
-    if (fs::is_directory(path)) {
-      continue;
-    }
-
-    std::cmatch match;
-    const char * msr = path.generic_string().c_str();
-
-    // /dev/cpu/[0-9]/msr ?
-    if (!std::regex_match(msr, match, std::regex(".*msr"))) {
-      continue;
-    }
-
-    list.push_back(path.generic_string());
-  }
-
-  std::sort(list.begin(), list.end(), [](const std::string & c1, const std::string & c2) {
-    std::cmatch match;
-    const std::regex filter(".*/(\\d+)/msr");
-    int n1 = 0;
-    int n2 = 0;
-    if (std::regex_match(c1.c_str(), match, filter)) {
-      n1 = std::stoi(match[1].str());
-    }
-    if (std::regex_match(c2.c_str(), match, filter)) {
-      n2 = std::stoi(match[1].str());
-    }
-    return n1 < n2;
-  });  // NOLINT
-
-  if (list.empty()) {
-    printf("No msr found in /dev/cpu.\n");
-    return EXIT_FAILURE;
-  }
-
-  // Put the program in the background
-  if (daemon(0, 0) < 0) {
-    printf("Failed to put the program in the background. %s\n", strerror(errno));
-    return errno;
-  }
-
-  // Open connection to system logger
-  openlog(nullptr, LOG_PID, LOG_DAEMON);
-
-  run(port, list);
-
-  // Close descriptor used to write to system logger
-  closelog();
 
   return EXIT_SUCCESS;
 }

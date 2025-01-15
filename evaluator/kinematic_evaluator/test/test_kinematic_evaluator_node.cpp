@@ -26,6 +26,7 @@
 
 #include "boost/lexical_cast.hpp"
 
+#include <iostream>
 #include <memory>
 #include <string>
 #include <utility>
@@ -67,9 +68,7 @@ protected:
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(dummy_node);
   }
 
-  ~EvalTest() override
-  { /*rclcpp::shutdown();*/
-  }
+  ~EvalTest() override { /*rclcpp::shutdown();*/ }
 
   void setTargetMetric(kinematic_diagnostics::Metric metric)
   {
